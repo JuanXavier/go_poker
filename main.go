@@ -3,10 +3,11 @@ package main
 import (
 	"fmt"
 	"github.com/juanxavier/go_poker/deck"
-) 
+)
 
-func main () {
-	// card := deck.NewCard(deck.Spades, 3)
-	d := deck.New()
-	fmt.Println(d)
+func main() {
+	for i := 0; i < 10; i++ {
+		d := deck.New()
+		fmt.Println(d)
+	}
 }
