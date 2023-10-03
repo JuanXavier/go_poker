@@ -1,5 +1,10 @@
 package deck
 
+import (
+	"fmt"
+	"strconv"
+) 
+
 type Suit int
 
 func (s Suit) String() string {
@@ -25,22 +30,26 @@ const (
 )
 
 type Card struct {
-	Suit suit
+	Suit Suit
 	Value int
 }
 
 func (c Card) String() string {
-	return fmt.Sprintf("%d of %s %s", c.value, c.suit, suitToUnicode(s.suit))
+	value := strconv.Itoa(c.Value)
+	if c.Value ==1 {
+		value = "Ace"
+	} 
+	return fmt.Sprintf("%s of %s %s", value, c.Suit, suitToUnicode(c.Suit))
 }
 
 func NewCard(s Suit, v int) Card {
 	if v >13 {
 		panic("The value of a card must be between 1 and 13")
 	}
-	return Card (
-		suit: s,
-		value: v
-	)
+	return Card {
+		Suit: s,
+		Value: v,
+	}
 }
 
 func suitToUnicode(s Suit) string {

@@ -6,6 +6,6 @@ import (
 ) 
 
 func main () {
-	card := deck.NewCard(deck.Spaces, 11)
-	fmt.Println("Hey motherfucker")
+	card := deck.NewCard(deck.Spades, 3)
+	fmt.Println(card)
 }
