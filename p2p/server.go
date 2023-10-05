@@ -3,7 +3,6 @@ package p2p
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"net"
 	"sync"
 )
@@ -11,23 +10,6 @@ import (
 /* ****************************************************** */
 /*                          TYPES                         */
 /* ****************************************************** */
-
-type Peer struct {
-	conn net.Conn
-}
-
-type TCPTransport struct {
-}
-
-type Message struct {
-	Payload io.Reader
-	From    net.Addr
-}
-
-func (p *Peer) Send(b []byte) error {
-	_, err := p.conn.Write(b)
-	return err
-}
 
 type ServerConfig struct {
 	Version    string
@@ -125,11 +107,6 @@ func (s *Server) acceptLoop() {
 }
 
 func (s *Server) handleConn(p *Peer) {
-
-	// defer func() {
-	// 	s.delPeer <- p
-	// }()
-
 	buf := make([]byte, 1024)
 	for {
 		n, err := p.conn.Read(buf)
@@ -145,7 +122,6 @@ func (s *Server) handleConn(p *Peer) {
 		fmt.Println(string(buf[:n]))
 	}
 	s.delPeer <- p
-
 }
 
 func (s *Server) listen() error {
