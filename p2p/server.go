@@ -30,6 +30,7 @@ func (p *Peer) Send(b []byte) error {
 }
 
 type ServerConfig struct {
+	Version    string
 	ListenAddr string
 }
 
@@ -40,6 +41,7 @@ type Server struct {
 	mu       sync.RWMutex // mutex for concurrent access,
 	peers    map[net.Addr]*Peer
 	addPeer  chan *Peer
+	delPeer  chan *Peer
 	msgCh    chan *Message
 }
 
@@ -49,9 +51,11 @@ type Server struct {
 // NewServer initializes and returns a new Server instance.
 func NewServer(cfg ServerConfig) *Server {
 	return &Server{
+		handler:      &DefaultHandler{},
 		ServerConfig: cfg,
 		peers:        make(map[net.Addr]*Peer),
 		addPeer:      make(chan *Peer),
+		delPeer:      make(chan *Peer),
 		msgCh:        make(chan *Message),
 	}
 }
@@ -67,6 +71,20 @@ func (s *Server) Start() {
 	fmt.Printf("game server running on port %s\n", s.ListenAddr)
 
 	s.acceptLoop()
+}
+
+func (s *Server) Connect(addr string) error {
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		return err
+	}
+	// panic("connected with remote")
+
+	peer := &Peer{
+		conn: conn,
+	}
+	s.addPeer <- peer
+	return peer.Send([]byte(s.Version))
 }
 
 // Method belonging to server struct
@@ -97,30 +115,37 @@ func (s *Server) acceptLoop() {
 		// which means it will be received as a value on the receiving end of the channel.
 		s.addPeer <- peer
 
-		peer.Send([]byte("go_poker_v0.1\n"))
+		peer.Send([]byte(s.Version))
 
 		//starts a new goroutine by calling the handleConn() method of the Server object s and passing the conn
 		// object as an argument. Goroutines allow concurrent execution of functions,
 		//and this line enables the handleConn() method to run concurrently with the acceptLoop() method.
-		go s.handleConn(conn)
+		go s.handleConn(peer)
 	}
 }
 
-func (s *Server) handleConn(conn net.Conn) {
+func (s *Server) handleConn(p *Peer) {
+
+	// defer func() {
+	// 	s.delPeer <- p
+	// }()
+
 	buf := make([]byte, 1024)
 	for {
-		n, err := conn.Read(buf)
+		n, err := p.conn.Read(buf)
 		if err != nil {
 			break
 		}
 
 		s.msgCh <- &Message{
-			From:    conn.RemoteAddr(),
+			From:    p.conn.RemoteAddr(),
 			Payload: bytes.NewReader(buf[:n]),
 		}
 
 		fmt.Println(string(buf[:n]))
 	}
+	s.delPeer <- p
+
 }
 
 func (s *Server) listen() error {
@@ -135,6 +160,11 @@ func (s *Server) listen() error {
 func (s *Server) loop() {
 	for {
 		select {
+		case peer := <-s.delPeer:
+			delete(s.peers, peer.conn.RemoteAddr())
+
+			fmt.Printf("player dis connected %s\n", peer.conn.RemoteAddr())
+
 		case peer := <-s.addPeer:
 			s.peers[peer.conn.RemoteAddr()] = peer
 			fmt.Printf("new player connected %s\n", peer.conn.RemoteAddr())
