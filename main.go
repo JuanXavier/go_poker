@@ -1,7 +1,8 @@
 package main
 
 import (
-	"fmt"
+	// "fmt"
+	"log"
 	// "github.com/juanxavier/go_poker/deck"
 	"github.com/juanxavier/go_poker/p2p"
 	"time"
@@ -10,8 +11,9 @@ import (
 func main() {
 	/* ----------------------- SERVER ----------------------- */
 	cfg := p2p.ServerConfig{
-		Version:    "0.1.0",
-		ListenAddr: ":3001",
+		Version:     "0.1.0",
+		ListenAddr:  ":3000",
+		GameVariant: p2p.TexasHoldEm,
 	}
 	server := p2p.NewServer(cfg)
 	go server.Start()
@@ -19,14 +21,15 @@ func main() {
 
 	/* -------------------- REMOTE SERVER ------------------- */
 	remoteCfg := p2p.ServerConfig{
-		Version:    "0.1.0",
-		ListenAddr: ":4000",
+		Version:     "0.1.0",
+		ListenAddr:  ":4000",
+		GameVariant: p2p.TexasHoldEm,
 	}
 	remoteServer := p2p.NewServer(remoteCfg)
 	go remoteServer.Start()
 
-	if err := remoteServer.Connect(":3001"); err != nil {
-		fmt.Println(err)
+	if err := remoteServer.Connect(":3000"); err != nil {
+		log.Fatal(err)
 	}
 
 	select {}

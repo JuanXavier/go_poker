@@ -11,9 +11,26 @@ import (
 /*                          TYPES                         */
 /* ****************************************************** */
 
+type GameVariant uint8
+
+func (gv GameVariant) String() string {
+	switch gv {
+	case TexasHoldEm:
+		return "Texas Hold'em"
+	default:
+		return "Unknown"
+	}
+}
+
+const (
+	TexasHoldEm GameVariant = iota
+	Other
+)
+
 type ServerConfig struct {
-	Version    string
-	ListenAddr string
+	Version     string
+	ListenAddr  string
+	GameVariant GameVariant
 }
 
 type Server struct {
@@ -55,8 +72,9 @@ func (s *Server) Start() {
 	fmt.Printf("game server running on port %s\n", s.ListenAddr)
 
 	logrus.WithFields(logrus.Fields{
-		"port": s.ListenAddr,
-		"type": "Texas Hold'em Poker",
+		"port":    s.ListenAddr,
+		"type":    "Texas Hold'em Poker",
+		"variant": s.GameVariant,
 	}).Info("Started new game server")
 
 	s.transport.ListenAndAccept()
@@ -97,10 +115,16 @@ func (s *Server) loop() {
 			s.peers[peer.conn.RemoteAddr()] = peer
 
 			/* ----------------------- MESSAGE ---------------------- */
-		case msg := <-s.msgCh:
-			if err := s.handler.HandleMessage(msg); err != nil {
-				panic(err)
-			}
+			// case msg := <-s.msgCh:
+			// 	if err := s.handler.HandleMessage(msg); err != nil {
+			// 		panic(err)
+			// 	}
 		}
 	}
+}
+
+func (s *Server) HandleMessage(msg *Message) error {
+	fmt.Printf("%+v\n", msg)
+	return s.handler.HandleMessage(msg)
+
 }
