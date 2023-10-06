@@ -3,6 +3,7 @@ package p2p
 import (
 	"bytes"
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"io"
 	"net"
 )
@@ -38,16 +39,44 @@ func (p *Peer) ReadLoop(msgCh chan *Message) {
 		fmt.Println(string(buf[:n]))
 	}
 
+	// todo unregister peer
 	p.conn.Close()
 }
 
 type TCPTransport struct {
 	listenAddr string
 	listener   net.Listener
+	AddPeer    chan *Peer
+	DelPeer    chan *Peer
 }
 
+// func NewTCPTransport(addr string, addPeer chan *Peer, delPeer chan *Peer) *TCPTransport {
 func NewTCPTransport(addr string) *TCPTransport {
 	return &TCPTransport{
 		listenAddr: addr,
 	}
+}
+
+func (t *TCPTransport) ListenAndAccept() error {
+	ln, err := net.Listen("tcp", t.listenAddr)
+	if err != nil {
+		return err
+	}
+	t.listener = ln
+
+	for {
+		conn, err := ln.Accept()
+		if err != nil {
+			logrus.Error(err)
+			continue
+		}
+
+		peer := &Peer{
+			conn: conn,
+		}
+
+		t.AddPeer <- peer
+
+	}
+	return fmt.Errorf("TCPTransport stopped!")
 }
