@@ -106,20 +106,21 @@ func (s *Server) loop() {
 			// Remove peer from map
 			delete(s.peers, peer.conn.RemoteAddr())
 
-		/* ---------------------- ADD PEER ---------------------- */
+			/* ---------------------- ADD PEER ---------------------- */
 		case peer := <-s.addPeer:
-
 			//handshake with peer
+			go s.SendHandshake(peer)
+			// Check for errors
 			if err := s.handshake(peer); err != nil {
-
-				logrus.WithFields(logrus.Fields{
-					"addr": peer.conn.RemoteAddr(),
-				}).Info("New player connected")
-
+				logrus.Errorf("Handshake with peer failed: %s", err)
 				continue
-			} else {
-				logrus.Info("Handshake failed")
 			}
+
+			// logrus.WithFields(logrus.Fields{
+			// 	"addr": peer.conn.RemoteAddr(),
+			// }).Info("New player connected")
+
+			// logrus.Info("Handshake failed")
 
 			// TODO
 			go peer.ReadLoop(s.msgCh)
@@ -162,6 +163,13 @@ func (s *Server) handshake(p *Peer) error {
 		return err
 	}
 	fmt.Printf("hs =>%+v\n", hs)
+
+	logrus.WithFields(logrus.Fields{
+		"peer":    p.conn.RemoteAddr(),
+		"version": hs.Version,
+		"variant": hs.GameVariant,
+	}).Info("New player connected")
+
 	return nil
 }
 
