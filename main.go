@@ -17,6 +17,8 @@ func main() {
 	}
 	server := p2p.NewServer(cfg)
 	go server.Start()
+
+	// Wait
 	time.Sleep(1 * time.Second)
 
 	/* -------------------- REMOTE SERVER ------------------- */
