@@ -1,11 +1,21 @@
 package p2p
 
 import (
-	"bytes"
+	// "bytes"
 	"encoding/gob"
 	"github.com/sirupsen/logrus"
 	"net"
 )
+
+type NetAddr string
+
+func (n NetAddr) String() string {
+	return string(n)
+}
+
+func (n NetAddr) Network() string {
+	return "tcp"
+}
 
 type Peer struct {
 	conn     net.Conn
@@ -18,26 +28,26 @@ func (p *Peer) Send(b []byte) error {
 }
 
 func (p *Peer) ReadLoop(msgCh chan *Message) {
-	buf := make([]byte, 1024)
+	// buf := make([]byte, 1024)
 	for {
-		n, err := p.conn.Read(buf)
-		if err != nil {
-			break
-		}
+		// n, err := p.conn.Read(buf)
+		// if err != nil {
+		// 	break
+		// }
 
-		// msg := &Message()
 		msg := new(Message)
 
 		if err := gob.NewDecoder(p.conn).Decode(&msg); err != nil {
+			logrus.Errorf("decode msg error %s", err)
 			break
 		}
 
 		msgCh <- msg
 
-		msgCh <- &Message{
-			From:    p.conn.RemoteAddr(),
-			Payload: bytes.NewReader(buf[:n]),
-		}
+		// msgCh <- &Message{
+		// 	From:    p.conn.RemoteAddr(),
+		// 	Payload: bytes.NewReader(buf[:n]),
+		// }
 	}
 
 	p.conn.Close()

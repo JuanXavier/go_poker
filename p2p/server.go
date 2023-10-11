@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/sirupsen/logrus"
 	"net"
+	"reflect"
 	"sync"
 )
 
@@ -126,6 +127,9 @@ func (s *Server) loop() {
 					delete(s.peers, peer.conn.RemoteAddr())
 					continue
 				}
+				if err := s.sendPeerList(peer); err != nil {
+					logrus.Errorf("Peer list error: %s", err)
+				}
 			}
 
 			logrus.WithFields(logrus.Fields{
@@ -146,6 +150,20 @@ func (s *Server) loop() {
 /* ****************************************************** */
 /*                        HANDSHAKE                       */
 /* ****************************************************** */
+func (s *Server) sendPeerList(p *Peer) error {
+	peerList := MessagePeerList{
+		make([]net.Addr, len(s.peers)),
+	}
+
+	msg := NewMessage(NetAddr(s.ListenAddr), peerList)
+
+	buf := new(bytes.Buffer)
+
+	if err := gob.NewEncoder(buf).Encode(msg); err != nil {
+		return err
+	}
+	return p.Send(buf.Bytes())
+}
 
 func (s *Server) SendHandshake(p *Peer) error {
 	hs := &Handshake{
@@ -186,6 +204,10 @@ func (s *Server) handshake(p *Peer) error {
 
 func (s *Server) HandleMessage(msg *Message) error {
 	fmt.Printf("%+v\n", msg)
-	// payload :=
-	return nil
+	panic(reflect.TypeOf(msg))
+	// return nil
+}
+
+func init() {
+	gob.Register(MessagePeerList{})
 }
