@@ -2,9 +2,9 @@ package main
 
 import (
 	// "fmt"
-	"log"
 	// "github.com/juanxavier/go_poker/deck"
 	"github.com/juanxavier/go_poker/p2p"
+	"log"
 	"time"
 )
 
@@ -35,5 +35,4 @@ func main() {
 	}
 
 	select {}
-
 }

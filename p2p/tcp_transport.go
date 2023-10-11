@@ -2,16 +2,10 @@ package p2p
 
 import (
 	"bytes"
-	"fmt"
+	"encoding/gob"
 	"github.com/sirupsen/logrus"
-	"io"
 	"net"
 )
-
-type Message struct {
-	Payload io.Reader
-	From    net.Addr
-}
 
 type Peer struct {
 	conn     net.Conn
@@ -27,20 +21,25 @@ func (p *Peer) ReadLoop(msgCh chan *Message) {
 	buf := make([]byte, 1024)
 	for {
 		n, err := p.conn.Read(buf)
-
 		if err != nil {
 			break
 		}
+
+		// msg := &Message()
+		msg := new(Message)
+
+		if err := gob.NewDecoder(p.conn).Decode(&msg); err != nil {
+			break
+		}
+
+		msgCh <- msg
 
 		msgCh <- &Message{
 			From:    p.conn.RemoteAddr(),
 			Payload: bytes.NewReader(buf[:n]),
 		}
-
-		fmt.Println(string(buf[:n]))
 	}
 
-	// todo unregister peer
 	p.conn.Close()
 }
 
