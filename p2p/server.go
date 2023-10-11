@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/sirupsen/logrus"
 	"net"
-	"reflect"
 	"sync"
 )
 
@@ -140,7 +139,7 @@ func (s *Server) loop() {
 
 		/* ----------------------- MESSAGE ---------------------- */
 		case msg := <-s.msgCh:
-			if err := s.HandleMessage(msg); err != nil {
+			if err := s.handleMessage(msg); err != nil {
 				panic(err)
 			}
 		}
@@ -152,13 +151,17 @@ func (s *Server) loop() {
 /* ****************************************************** */
 func (s *Server) sendPeerList(p *Peer) error {
 	peerList := MessagePeerList{
-		make([]net.Addr, len(s.peers)),
+		make([]string, len(s.peers)),
 	}
 
-	msg := NewMessage(NetAddr(s.ListenAddr), peerList)
+	it := 0
+	for addr := range s.peers {
+		peerList.Peers[it] = addr.String()
+	}
+
+	msg := NewMessage(s.ListenAddr, peerList)
 
 	buf := new(bytes.Buffer)
-
 	if err := gob.NewEncoder(buf).Encode(msg); err != nil {
 		return err
 	}
@@ -202,10 +205,27 @@ func (s *Server) handshake(p *Peer) error {
 	return nil
 }
 
-func (s *Server) HandleMessage(msg *Message) error {
-	fmt.Printf("%+v\n", msg)
-	panic(reflect.TypeOf(msg))
-	// return nil
+func (s *Server) handleMessage(msg *Message) error {
+	logrus.WithFields(logrus.Fields{
+		"from": msg.From,
+	}).Info("received message")
+
+	switch v := msg.Payload.(type) {
+	case *MessagePeerList:
+		fmt.Printf("%+v\n", v)
+		return s.handlePeerList(*v)
+	}
+	return nil
+}
+
+func (s *Server) handlePeerList(l MessagePeerList) error {
+	for i := 0; i < len(l.Peers); i++ {
+		if err := s.Connect(l.Peers[i]); err != nil {
+			logrus.Errorf("Failed to connect to peer: %s", err)
+			continue
+		}
+	}
+	return nil
 }
 
 func init() {

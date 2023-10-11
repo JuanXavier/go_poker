@@ -2,12 +2,11 @@ package p2p
 
 import (
 	// "io"
-	"net"
 )
 
 type Message struct {
 	Payload any
-	From    net.Addr
+	From    string
 }
 
 type Handshake struct {
@@ -17,10 +16,10 @@ type Handshake struct {
 }
 
 type MessagePeerList struct {
-	Peers []net.Addr
+	Peers []string
 }
 
-func NewMessage(from net.Addr, payload any) *Message {
+func NewMessage(from string, payload any) *Message {
 	return &Message{
 		From:    from,
 		Payload: payload,
