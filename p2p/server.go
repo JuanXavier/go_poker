@@ -2,11 +2,9 @@ package p2p
 
 import (
 	"bytes"
-	"encoding/binary"
 	"encoding/gob"
 	"fmt"
 	"github.com/sirupsen/logrus"
-	"io"
 	"net"
 	"sync"
 )
@@ -92,10 +90,12 @@ func (s *Server) Connect(addr string) error {
 	}
 
 	peer := &Peer{
-		conn: conn,
+		conn:     conn,
+		outbound: true,
 	}
 	s.addPeer <- peer
-	return peer.Send([]byte(s.Version))
+
+	return s.SendHandshake(peer)
 }
 
 func (s *Server) loop() {
@@ -115,17 +115,21 @@ func (s *Server) loop() {
 			// If a new peer connects to the server we send our handshake
 			//message and wait for the response..
 		case peer := <-s.addPeer:
-			//handshake with peer
-			s.SendHandshake(peer)
-
 			// Check for errors and log them
 			if err := s.handshake(peer); err != nil {
 				logrus.Errorf("Handshake with peer failed: %s", err)
+				peer.conn.Close()
 				continue
 			}
 
 			// TODO
 			go peer.ReadLoop(s.msgCh)
+
+			if !peer.outbound {
+				if err := s.SendHandshake(peer); err != nil {
+					logrus.Errorf("Failed to send handshake with peer: %s", err)
+				}
+			}
 
 			logrus.WithFields(logrus.Fields{
 				"addr": peer.conn.RemoteAddr(),
@@ -169,24 +173,6 @@ func (s *Server) SendHandshake(p *Peer) error {
 /* ****************************************************** */
 /*                   ENCODING / DECODING                  */
 /* ****************************************************** */
-
-func (hs *Handshake) Encode(w io.Writer) error {
-	if err := binary.Write(w, binary.LittleEndian, []byte(hs.Version)); err != nil {
-		return err
-	}
-	return binary.Write(w, binary.LittleEndian, &hs.GameVariant)
-}
-
-func (hs *Handshake) Decode(r io.Reader) error {
-	if err := binary.Read(r, binary.LittleEndian, []byte(hs.Version)); err != nil {
-		return err
-	}
-
-	var variant uint8
-	binary.Read(r, binary.LittleEndian, &variant)
-	hs.GameVariant = GameVariant(variant)
-	return binary.Read(r, binary.LittleEndian, &hs.GameVariant)
-}
 
 /* ****************************************************** */
 /*                        HANDSHAKE                       */
