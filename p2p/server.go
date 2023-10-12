@@ -7,6 +7,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"net"
 	"sync"
+	"time"
 )
 
 /* ****************************************************** */
@@ -57,7 +58,7 @@ func NewServer(cfg ServerConfig) *Server {
 	s := &Server{
 		ServerConfig: cfg,
 		peers:        make(map[net.Addr]*Peer),
-		addPeer:      make(chan *Peer),
+		addPeer:      make(chan *Peer, 10),
 		delPeer:      make(chan *Peer),
 		msgCh:        make(chan *Message),
 		gameState:    NewGameState(),
@@ -81,7 +82,9 @@ func (s *Server) Start() {
 }
 
 func (s *Server) Connect(addr string) error {
-	conn, err := net.Dial("tcp", addr)
+	fmt.Printf("Dialing from %s to %s\n", s.ListenAddr, addr)
+	conn, err := net.DialTimeout("tcp", addr, 5*time.Second)
+
 	if err != nil {
 		return err
 	}
@@ -89,6 +92,8 @@ func (s *Server) Connect(addr string) error {
 		conn:     conn,
 		outbound: true,
 	}
+
+	fmt.Printf("Dial from %s to %s\n successful!", s.ListenAddr, addr)
 	s.addPeer <- peer
 	return s.SendHandshake(peer)
 }
@@ -219,7 +224,6 @@ func (s *Server) handleMessage(msg *Message) error {
 }
 
 func (s *Server) handlePeerList(l MessagePeerList) error {
-
 	fmt.Printf("peerList => %+v\n", l)
 
 	for i := 0; i < len(l.Peers); i++ {
@@ -228,6 +232,7 @@ func (s *Server) handlePeerList(l MessagePeerList) error {
 			continue
 		}
 	}
+
 	return nil
 }
 

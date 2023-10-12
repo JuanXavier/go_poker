@@ -11,11 +11,11 @@ func main() {
 	playerA := makeServerAndStart(":3000")
 	playerB := makeServerAndStart(":4000")
 	playerC := makeServerAndStart(":5000")
+	playerD := makeServerAndStart(":6000")
 
-	playerC.Connect(playerA.ListenAddr)
-	playerB.Connect(playerC.ListenAddr)
-	_ = playerA
-	_ = playerB
+	playerB.Connect(playerA.ListenAddr)
+	playerC.Connect(playerB.ListenAddr)
+	playerD.Connect(playerC.ListenAddr)
 
 	select {}
 }
