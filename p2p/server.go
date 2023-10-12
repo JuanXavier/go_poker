@@ -157,6 +157,7 @@ func (s *Server) sendPeerList(p *Peer) error {
 	it := 0
 	for addr := range s.peers {
 		peerList.Peers[it] = addr.String()
+		it++
 	}
 
 	msg := NewMessage(s.ListenAddr, peerList)
@@ -211,14 +212,16 @@ func (s *Server) handleMessage(msg *Message) error {
 	}).Info("received message")
 
 	switch v := msg.Payload.(type) {
-	case *MessagePeerList:
-		fmt.Printf("%+v\n", v)
-		return s.handlePeerList(*v)
+	case MessagePeerList:
+		return s.handlePeerList(v)
 	}
 	return nil
 }
 
 func (s *Server) handlePeerList(l MessagePeerList) error {
+
+	fmt.Printf("peerList => %+v\n", l)
+
 	for i := 0; i < len(l.Peers); i++ {
 		if err := s.Connect(l.Peers[i]); err != nil {
 			logrus.Errorf("Failed to connect to peer: %s", err)

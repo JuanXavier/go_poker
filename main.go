@@ -9,12 +9,11 @@ import (
 
 func main() {
 	playerA := makeServerAndStart(":3000")
-	time.Sleep(1 * time.Second)
 	playerB := makeServerAndStart(":4000")
-	time.Sleep(1 * time.Second)
 	playerC := makeServerAndStart(":5000")
 
 	playerC.Connect(playerA.ListenAddr)
+	playerB.Connect(playerC.ListenAddr)
 	_ = playerA
 	_ = playerB
 
@@ -29,5 +28,6 @@ func makeServerAndStart(addr string) *p2p.Server {
 	}
 	server := p2p.NewServer(cfg)
 	go server.Start()
+	time.Sleep(1 * time.Second)
 	return server
 }
