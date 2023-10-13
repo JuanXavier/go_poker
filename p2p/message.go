@@ -1,7 +1,7 @@
 package p2p
 
 import (
-	// "io"
+// "io"
 )
 
 type Message struct {
@@ -13,6 +13,7 @@ type Handshake struct {
 	Version     string
 	GameVariant GameVariant
 	GameStatus  GameStatus
+	ListenAddr  string
 }
 
 type MessagePeerList struct {
