@@ -77,7 +77,6 @@ func (s *Server) Start() {
 	logrus.SetFormatter(&logrus.TextFormatter{
 		DisableTimestamp: true,
 	})
-
 	logrus.WithFields(logrus.Fields{
 		"port":    s.ListenAddr,
 		"variant": s.GameVariant,
@@ -88,11 +87,11 @@ func (s *Server) Start() {
 
 func (s *Server) Connect(addr string) error {
 	if s.isInPeerList(addr) {
-		fmt.Printf("FUCK")
+		// fmt.Printf("FUCK\n")
 		return nil
 	}
 
-	conn, err := net.DialTimeout("tcp", addr, 5*time.Second)
+	conn, err := net.DialTimeout("tcp", addr, 1*time.Second)
 
 	if err != nil {
 		return err
@@ -206,6 +205,7 @@ func (s *Server) Peers() []string {
 	}
 	return peers
 }
+
 func (s *Server) isInPeerList(addr string) bool {
 	peers := s.Peers()
 
@@ -214,6 +214,7 @@ func (s *Server) isInPeerList(addr string) bool {
 			return true
 		}
 	}
+
 	for _, peer := range s.peers {
 		if peer.listenAddr == addr {
 			return true
@@ -264,7 +265,15 @@ func (s *Server) handleNewPeer(peer *Peer) error {
 
 func (s *Server) sendPeerList(p *Peer) error {
 	peerList := MessagePeerList{
-		Peers: s.Peers(),
+		Peers: []string{},
+	}
+
+	peers := s.Peers()
+
+	for i := 0; i < len(peers); i++ {
+		if peers[i] != p.listenAddr {
+			peerList.Peers = append(peerList.Peers, peers[i])
+		}
 	}
 
 	// for _, peer := range s.peers {
@@ -288,9 +297,9 @@ func (s *Server) handlePeerList(l MessagePeerList) error {
 	logrus.WithFields(logrus.Fields{
 		"we":   s.ListenAddr,
 		"list": l.Peers,
-	}).Info("received peer list message")
+	}) // .Info("received peer list message")
 
-	fmt.Printf("peerList => %+v\n", l)
+	// fmt.Printf("peerList => %+v\n", l)
 
 	for i := 0; i < len(l.Peers); i++ {
 		if err := s.Connect(l.Peers[i]); err != nil {
