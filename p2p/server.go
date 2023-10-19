@@ -71,27 +71,6 @@ func NewServer(cfg ServerConfig) *Server {
 	return s
 }
 
-func (s *Server) AddPeer(p *Peer) {
-	s.peerLock.Lock() // writing
-	defer s.peerLock.Unlock()
-	s.peers[p.conn.RemoteAddr()] = p
-}
-
-func (s *Server) Peers() []string {
-	s.peerLock.RLock() //reading
-	defer s.peerLock.RUnlock()
-
-	peers := make([]string, len(s.peers))
-
-	it := 0
-	for _, peer := range s.peers {
-		peers[it] = peer.listenAddr
-		it++
-	}
-
-	return peers
-}
-
 func (s *Server) Start() {
 	go s.loop()
 
@@ -107,24 +86,9 @@ func (s *Server) Start() {
 	s.transport.ListenAndAccept()
 }
 
-func (s *Server) isInPeerList(addr string) bool {
-
-	peers := s.Peers()
-	for i := o; i < len(peers); i++ {
-		if peers[i] == addr {
-			return true
-		}
-	}
-	for _, peer := range s.peers {
-		if peer.listenAddr == addr {
-			return true
-		}
-	}
-	return false
-}
-
 func (s *Server) Connect(addr string) error {
 	if s.isInPeerList(addr) {
+		fmt.Printf("FUCK")
 		return nil
 	}
 
@@ -223,6 +187,41 @@ func init() {
 /*                        PEER LIST                       */
 /* ****************************************************** */
 
+func (s *Server) AddPeer(p *Peer) {
+	s.peerLock.Lock() // writing
+	defer s.peerLock.Unlock()
+	s.peers[p.conn.RemoteAddr()] = p
+}
+
+func (s *Server) Peers() []string {
+	s.peerLock.RLock() //reading
+	defer s.peerLock.RUnlock()
+
+	peers := make([]string, len(s.peers))
+
+	it := 0
+	for _, peer := range s.peers {
+		peers[it] = peer.listenAddr
+		it++
+	}
+	return peers
+}
+func (s *Server) isInPeerList(addr string) bool {
+	peers := s.Peers()
+
+	for i := 0; i < len(peers); i++ {
+		if peers[i] == addr {
+			return true
+		}
+	}
+	for _, peer := range s.peers {
+		if peer.listenAddr == addr {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Server) handleNewPeer(peer *Peer) error {
 	hs, err := s.handshake(peer)
 
@@ -242,9 +241,11 @@ func (s *Server) handleNewPeer(peer *Peer) error {
 			return fmt.Errorf("Failed to send handshake with peer: %s", err)
 		}
 
-		if err := s.sendPeerList(peer); err != nil {
-			return fmt.Errorf("Peer list error: %s", err)
-		}
+		go func() {
+			if err := s.sendPeerList(peer); err != nil {
+				logrus.Errorf("Peer list error: %s", err)
+			}
+		}()
 	}
 
 	logrus.WithFields(logrus.Fields{
@@ -256,31 +257,8 @@ func (s *Server) handleNewPeer(peer *Peer) error {
 		"we":         s.ListenAddr,
 	}).Info("Handshake successful: new player connected")
 
-	//add to map
-	s.peers[peer.conn.RemoteAddr()] = peer
-
-	//
-
+	// s.peers[peer.conn.RemoteAddr()] = peer
 	s.AddPeer(peer)
-	return nil
-}
-
-func (s *Server) handlePeerList(l MessagePeerList) error {
-
-	logrus.WithFields(logrus.Fields{
-		"we":   s.ListenAddr,
-		"list": l.Peers,
-	}).Info("received peer list message")
-
-	fmt.Printf("peerList => %+v\n", l)
-
-	for i := 0; i < len(l.Peers); i++ {
-		if err := s.Connect(l.Peers[i]); err != nil {
-			logrus.Errorf("Failed to connect to peer: %s", err)
-			continue
-		}
-	}
-
 	return nil
 }
 
@@ -304,4 +282,22 @@ func (s *Server) sendPeerList(p *Peer) error {
 		return err
 	}
 	return p.Send(buf.Bytes())
+}
+
+func (s *Server) handlePeerList(l MessagePeerList) error {
+	logrus.WithFields(logrus.Fields{
+		"we":   s.ListenAddr,
+		"list": l.Peers,
+	}).Info("received peer list message")
+
+	fmt.Printf("peerList => %+v\n", l)
+
+	for i := 0; i < len(l.Peers); i++ {
+		if err := s.Connect(l.Peers[i]); err != nil {
+			logrus.Errorf("Failed to connect to peer: %s", err)
+			continue
+		}
+	}
+
+	return nil
 }
