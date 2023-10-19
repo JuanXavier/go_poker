@@ -25,7 +25,8 @@ type ServerConfig struct {
 type Server struct {
 	ServerConfig
 	transport *TCPTransport
-	mu        sync.RWMutex // mutex for concurrent access,
+	peerLock  sync.RWMutex // mutex for concurrent access,
+
 	peers     map[net.Addr]*Peer
 	addPeer   chan *Peer
 	delPeer   chan *Peer
@@ -58,7 +59,7 @@ func NewServer(cfg ServerConfig) *Server {
 	s := &Server{
 		ServerConfig: cfg,
 		peers:        make(map[net.Addr]*Peer),
-		addPeer:      make(chan *Peer, 10),
+		addPeer:      make(chan *Peer, 20),
 		delPeer:      make(chan *Peer),
 		msgCh:        make(chan *Message),
 		gameState:    NewGameState(),
@@ -70,8 +71,33 @@ func NewServer(cfg ServerConfig) *Server {
 	return s
 }
 
+func (s *Server) AddPeer(p *Peer) {
+	s.peerLock.Lock() // writing
+	defer s.peerLock.Unlock()
+	s.peers[p.conn.RemoteAddr()] = p
+}
+
+func (s *Server) Peers() []string {
+	s.peerLock.RLock() //reading
+	defer s.peerLock.RUnlock()
+
+	peers := make([]string, len(s.peers))
+
+	it := 0
+	for _, peer := range s.peers {
+		peers[it] = peer.listenAddr
+		it++
+	}
+
+	return peers
+}
+
 func (s *Server) Start() {
 	go s.loop()
+
+	logrus.SetFormatter(&logrus.TextFormatter{
+		DisableTimestamp: true,
+	})
 
 	logrus.WithFields(logrus.Fields{
 		"port":    s.ListenAddr,
@@ -82,6 +108,13 @@ func (s *Server) Start() {
 }
 
 func (s *Server) isInPeerList(addr string) bool {
+
+	peers := s.Peers()
+	for i := o; i < len(peers); i++ {
+		if peers[i] == addr {
+			return true
+		}
+	}
 	for _, peer := range s.peers {
 		if peer.listenAddr == addr {
 			return true
@@ -225,6 +258,10 @@ func (s *Server) handleNewPeer(peer *Peer) error {
 
 	//add to map
 	s.peers[peer.conn.RemoteAddr()] = peer
+
+	//
+
+	s.AddPeer(peer)
 	return nil
 }
 
@@ -249,12 +286,12 @@ func (s *Server) handlePeerList(l MessagePeerList) error {
 
 func (s *Server) sendPeerList(p *Peer) error {
 	peerList := MessagePeerList{
-		Peers: []string{},
+		Peers: s.Peers(),
 	}
 
-	for _, peer := range s.peers {
-		peerList.Peers = append(peerList.Peers, peer.listenAddr)
-	}
+	// for _, peer := range s.peers {
+	// 	peerList.Peers = append(peerList.Peers, peer.listenAddr)
+	// }
 
 	if len(peerList.Peers) == 0 {
 		return nil

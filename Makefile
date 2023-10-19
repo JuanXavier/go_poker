@@ -1,7 +1,7 @@
 build:
-	@go build -o bin/go_poker
 
 run:
+	@go build -o bin/go_poker
 	@./bin/go_poker
 
 test:

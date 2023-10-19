@@ -2,8 +2,4 @@
 
 -   gob does not decode in pointers
 
-git add .
-
-git commit -am "your commit name"
-
-git push origin master
+git commit -am "your commit name" ; git push origin master
