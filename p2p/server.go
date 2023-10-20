@@ -258,8 +258,8 @@ func (s *Server) handleNewPeer(peer *Peer) error {
 		"we":         s.ListenAddr,
 	}).Info("Handshake successful: new player connected")
 
-	// s.peers[peer.conn.RemoteAddr()] = peer
 	s.AddPeer(peer)
+	s.gameState.AddPlayer(peer.listenAddr, hs.GameStatus)
 	return nil
 }
 
