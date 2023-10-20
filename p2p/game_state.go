@@ -1,14 +1,39 @@
 package p2p
 
 import (
-	"fmt"
+	// "fmt"
 	"github.com/sirupsen/logrus"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
 type GameStatus uint32
 
+const (
+	GameStatusWaitingForCards GameStatus = iota
+	GameStatusDealing
+	GameStatusPreFlop
+	GameStatusFlop
+	GameStatusTurn
+	GameStatusRiver
+)
+
+type Player struct {
+	Status GameStatus
+}
+
+type GameState struct {
+	isDealer   bool       // should be atomic accessible
+	gameStatus GameStatus // should be atomic accessible
+
+	playersWaitingForCards int32
+
+	playersLock sync.RWMutex
+	players     map[string]*Player
+}
+
+/* ---------------------- FUNCTIONS --------------------- */
 func (g GameStatus) String() string {
 	switch g {
 	case GameStatusWaitingForCards:
@@ -28,34 +53,47 @@ func (g GameStatus) String() string {
 	}
 }
 
-const (
-	GameStatusWaitingForCards GameStatus = iota
-	GameStatusDealing
-	GameStatusPreFlop
-	GameStatusFlop
-	GameStatusTurn
-	GameStatusRiver
-)
-
-type Player struct {
-	Status GameStatus
+func (g *GameState) AddPlayerWaitingForCards() {
+	atomic.AddInt32(&g.playersWaitingForCards, 1)
 }
 
-type GameState struct {
-	isDealer   bool       // should be atomic accessible
-	gameStatus GameStatus // should be atomic accessible
+func (g *GameState) CheckNeedDealCards() {
+	playersWaiting := atomic.LoadInt32(&g.playersWaitingForCards)
 
-	playersLock sync.RWMutex
-	players     map[string]*Player
+	if playersWaiting == int32(g.LenPlayersConnectedWithLock()) && g.isDealer && g.gameStatus == GameStatusWaitingForCards {
+		panic("dealing")
+	}
+}
+
+func (g *GameState) SetPlayerStatus(addr string, status GameStatus) {
+	// g.playersLock.Lock()
+	// defer g.playersLock.Unlock()
+	player, ok := g.players[addr]
+	if !ok {
+		panic("Player not found, although it should exist")
+	}
+	player.Status = status
+	g.CheckNeedDealCards()
+}
+
+func (g *GameState) LenPlayersConnectedWithLock() int {
+	g.playersLock.RLock()
+	defer g.playersLock.RUnlock()
+	return len(g.players)
 }
 
 func (g *GameState) AddPlayer(addr string, status GameStatus) {
 	g.playersLock.Lock()
 	defer g.playersLock.Unlock()
 
-	g.players[addr] = &Player{
-		Status: status,
+	if status == GameStatusWaitingForCards {
+		g.AddPlayerWaitingForCards()
 	}
+
+	g.players[addr] = new(Player)
+
+	// set the player status when adding the player
+	g.SetPlayerStatus(addr, status)
 
 	logrus.WithFields(logrus.Fields{
 		"addr":   addr,
@@ -70,26 +108,22 @@ func NewGameState() *GameState {
 		players:    make(map[string]*Player),
 	}
 	go g.loop()
-
 	return g
 }
 
 func (g *GameState) loop() {
-
 	ticker := time.NewTicker(time.Second * 5)
 
 	for {
-
 		select {
 		case <-ticker.C:
-
 			logrus.WithFields(logrus.Fields{
-				"connected players": len(g.players),
+				"connected players": g.LenPlayersConnectedWithLock(),
 				"status":            g.gameStatus,
 			}).Info("New player joined")
 
 		default:
-			fmt.Println("Unknown message type")
+			// logrus.Info("Unknown error type")
 		}
 	}
 }

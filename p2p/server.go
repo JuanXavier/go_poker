@@ -64,6 +64,9 @@ func NewServer(cfg ServerConfig) *Server {
 		msgCh:        make(chan *Message),
 		gameState:    NewGameState(),
 	}
+
+	//
+
 	tr := NewTCPTransport(s.ListenAddr)
 	s.transport = tr
 	tr.AddPeer = s.addPeer
