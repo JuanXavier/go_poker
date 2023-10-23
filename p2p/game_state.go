@@ -2,16 +2,18 @@ package p2p
 
 import (
 	// "fmt"
+	"github.com/juanxavier/go_poker/deck"
 	"github.com/sirupsen/logrus"
 	"sync"
 	"sync/atomic"
 	"time"
 )
 
-type GameStatus uint32
+type GameStatus int32
 
 const (
 	GameStatusWaitingForCards GameStatus = iota
+	GameStatusReceivingCards
 	GameStatusDealing
 	GameStatusPreFlop
 	GameStatusFlop
@@ -38,6 +40,8 @@ func (g GameStatus) String() string {
 	switch g {
 	case GameStatusWaitingForCards:
 		return "WAITING FOR CARDS"
+	case GameStatusReceivingCards:
+		return "RECEIVING CARDS"
 	case GameStatusDealing:
 		return "DEALING"
 	case GameStatusPreFlop:
@@ -72,7 +76,7 @@ func (g *GameState) CheckNeedDealCards() {
 }
 
 func (g *GameState) DealCards() {
-
+	g.broadcast <- MessageCards{Deck: deck.New()}
 }
 
 func (g *GameState) SetPlayerStatus(addr string, status GameStatus) {
@@ -121,6 +125,11 @@ func NewGameState(addr string, broadcast chan any) *GameState {
 	}
 	go g.loop()
 	return g
+}
+
+// todo check other RW ocurrencies of the GameStatus
+func (g *GameState) setStatus(s GameStatus) {
+	atomic.StoreInt32((*int32)(&g.gameStatus), (int32)(s))
 }
 
 func (g *GameState) loop() {
