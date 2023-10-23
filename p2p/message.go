@@ -1,12 +1,22 @@
 package p2p
 
-import (
-	"github.com/juanxavier/go_poker/deck"
-)
+import ()
 
 type Message struct {
 	Payload any
 	From    string
+}
+
+type BroadcastTo struct {
+	To      []string
+	Payload any
+}
+
+func NewMessage(from string, payload any) *Message {
+	return &Message{
+		From:    from,
+		Payload: payload,
+	}
 }
 
 type Handshake struct {
@@ -20,13 +30,6 @@ type MessagePeerList struct {
 	Peers []string
 }
 
-func NewMessage(from string, payload any) *Message {
-	return &Message{
-		From:    from,
-		Payload: payload,
-	}
-}
-
-type MessageCards struct {
-	Deck deck.Deck
+type MessageEncDeck struct {
+	Deck [][]byte
 }

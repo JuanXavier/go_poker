@@ -1,8 +1,6 @@
 package p2p
 
 import (
-	// "fmt"
-	"github.com/juanxavier/go_poker/deck"
 	"github.com/sirupsen/logrus"
 	"sync"
 	"sync/atomic"
@@ -28,7 +26,7 @@ type Player struct {
 type GameState struct {
 	isDealer               bool       // should be atomic accessible
 	gameStatus             GameStatus // should be atomic accessible
-	broadcast              chan any
+	broadcast              chan BroadcastTo
 	playersWaitingForCards int32
 	playersLock            sync.RWMutex
 	players                map[string]*Player
@@ -57,9 +55,34 @@ func (g GameStatus) String() string {
 	}
 }
 
+/* -------------------------- - ------------------------- */
+
+func (g *GameState) SendToPlayerWithStatus(payload any, s GameStatus) {
+	players := g.GetPlayersWithStatus(s)
+
+	g.broadcast <- BroadcastTo{
+		To:      players,
+		Payload: payload,
+	}
+}
+
+/* -------------------------- - ------------------------- */
+
+func (g *GameState) GetPlayersWithStatus(s GameStatus) []string {
+	players := []string{}
+	for addr, _ := range g.players {
+		players = append(players, addr)
+	}
+	return players
+}
+
+/* -------------------------- - ------------------------- */
+
 func (g *GameState) AddPlayerWaitingForCards() {
 	atomic.AddInt32(&g.playersWaitingForCards, 1)
 }
+
+/* -------------------------- - ------------------------- */
 
 func (g *GameState) CheckNeedDealCards() {
 	playersWaiting := atomic.LoadInt32(&g.playersWaitingForCards)
@@ -71,30 +94,38 @@ func (g *GameState) CheckNeedDealCards() {
 			"addr": g.listenAddr,
 		}).Info("Need to deal cards")
 
-		g.DealCards()
+		g.InitiateShuffleAndDeal()
 	}
 }
 
+/* -------------------------- - ------------------------- */
+
 func (g *GameState) DealCards() {
-	g.broadcast <- MessageCards{Deck: deck.New()}
+	// g.broadcast <- MessageEncDeck{}
 }
 
+/* -------------------------- - ------------------------- */
+
 func (g *GameState) SetPlayerStatus(addr string, status GameStatus) {
-	// g.playersLock.Lock()
-	// defer g.playersLock.Unlock()
 	player, ok := g.players[addr]
+
 	if !ok {
 		panic("Player not found, although it should exist")
 	}
+
 	player.Status = status
 	g.CheckNeedDealCards()
 }
+
+/* -------------------------- - ------------------------- */
 
 func (g *GameState) LenPlayersConnectedWithLock() int {
 	g.playersLock.RLock()
 	defer g.playersLock.RUnlock()
 	return len(g.players)
 }
+
+/* -------------------------- - ------------------------- */
 
 func (g *GameState) AddPlayer(addr string, status GameStatus) {
 	g.playersLock.Lock()
@@ -115,7 +146,9 @@ func (g *GameState) AddPlayer(addr string, status GameStatus) {
 	}).Info("New player joined")
 }
 
-func NewGameState(addr string, broadcast chan any) *GameState {
+/* -------------------------- - ------------------------- */
+
+func NewGameState(addr string, broadcast chan BroadcastTo) *GameState {
 	g := &GameState{
 		listenAddr: addr,
 		broadcast:  broadcast,
@@ -127,9 +160,12 @@ func NewGameState(addr string, broadcast chan any) *GameState {
 	return g
 }
 
-// todo check other RW ocurrencies of the GameStatus
-func (g *GameState) setStatus(s GameStatus) {
-	atomic.StoreInt32((*int32)(&g.gameStatus), (int32)(s))
+// todo check other RW occurrences of the GameStatus
+func (g *GameState) SetStatus(s GameStatus) {
+	// Only update when status is different
+	if g.gameStatus != s {
+		atomic.StoreInt32((*int32)(&g.gameStatus), (int32)(s))
+	}
 }
 
 func (g *GameState) loop() {
@@ -139,6 +175,7 @@ func (g *GameState) loop() {
 		select {
 		case <-ticker.C:
 			logrus.WithFields(logrus.Fields{
+				"we":                g.listenAddr,
 				"connected players": g.LenPlayersConnectedWithLock(),
 				"status":            g.gameStatus,
 			}).Info("New player joined")
@@ -147,4 +184,11 @@ func (g *GameState) loop() {
 			// logrus.Info("Unknown error type")
 		}
 	}
+}
+
+// only used for the "real" dealer
+func (g *GameState) InitiateShuffleAndDeal() {
+	g.SetStatus(GameStatusReceivingCards)
+	// g.broadcast <- MessageEncDeck{Deck: [][]byte{}}
+	g.SendToPlayerWithStatus(MessageEncDeck{Deck: [][]byte{}}, GameStatusWaitingForCards)
 }
