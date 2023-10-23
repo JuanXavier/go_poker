@@ -26,10 +26,10 @@ type Server struct {
 	ServerConfig
 	transport *TCPTransport
 	peerLock  sync.RWMutex // mutex for concurrent access,
-
 	peers     map[net.Addr]*Peer
 	addPeer   chan *Peer
 	delPeer   chan *Peer
+	broadcast chan (any)
 	msgCh     chan *Message
 	gameState *GameState
 }
@@ -62,8 +62,11 @@ func NewServer(cfg ServerConfig) *Server {
 		addPeer:      make(chan *Peer, 20),
 		delPeer:      make(chan *Peer),
 		msgCh:        make(chan *Message),
-		gameState:    NewGameState(),
+		broadcast:    make(chan any),
+		// gameState:    NewGameState(),
 	}
+
+	s.gameState = NewGameState(s.ListenAddr, s.broadcast)
 
 	//
 
@@ -106,6 +109,21 @@ func (s *Server) Connect(addr string) error {
 
 	s.addPeer <- peer
 	return s.SendHandshake(peer)
+}
+
+func (s *Server) Broadcast(payload []byte) error {
+	buf := new(bytes.Buffer)
+	if err := gob.NewEncoder(buf).Encode(payload); err != nil {
+	}
+
+	for _, peer := range s.peers {
+		go func(peer *Peer) {
+			if err := peer.Send(buf.Bytes()); err != nil {
+				logrus.Errorf("Broadcast to peer error", err)
+			}
+		}(peer)
+	}
+	return nil
 }
 
 func (s *Server) loop() {

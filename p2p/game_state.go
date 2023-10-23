@@ -24,13 +24,13 @@ type Player struct {
 }
 
 type GameState struct {
-	isDealer   bool       // should be atomic accessible
-	gameStatus GameStatus // should be atomic accessible
-
+	isDealer               bool       // should be atomic accessible
+	gameStatus             GameStatus // should be atomic accessible
+	broadcast              chan any
 	playersWaitingForCards int32
-
-	playersLock sync.RWMutex
-	players     map[string]*Player
+	playersLock            sync.RWMutex
+	players                map[string]*Player
+	listenAddr             string
 }
 
 /* ---------------------- FUNCTIONS --------------------- */
@@ -61,8 +61,18 @@ func (g *GameState) CheckNeedDealCards() {
 	playersWaiting := atomic.LoadInt32(&g.playersWaitingForCards)
 
 	if playersWaiting == int32(g.LenPlayersConnectedWithLock()) && g.isDealer && g.gameStatus == GameStatusWaitingForCards {
-		panic("dealing")
+
+		// do something
+		logrus.WithFields(logrus.Fields{
+			"addr": g.listenAddr,
+		}).Info("Need to deal cards")
+
+		g.DealCards()
 	}
+}
+
+func (g *GameState) DealCards() {
+
 }
 
 func (g *GameState) SetPlayerStatus(addr string, status GameStatus) {
@@ -101,8 +111,10 @@ func (g *GameState) AddPlayer(addr string, status GameStatus) {
 	}).Info("New player joined")
 }
 
-func NewGameState() *GameState {
+func NewGameState(addr string, broadcast chan any) *GameState {
 	g := &GameState{
+		listenAddr: addr,
+		broadcast:  broadcast,
 		isDealer:   false,
 		gameStatus: GameStatusWaitingForCards,
 		players:    make(map[string]*Player),

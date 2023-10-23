@@ -1,7 +1,7 @@
 package p2p
 
 import (
-// "io"
+	"github.com/juanxavier/go_poker/deck"
 )
 
 type Message struct {
@@ -25,4 +25,8 @@ func NewMessage(from string, payload any) *Message {
 		From:    from,
 		Payload: payload,
 	}
+}
+
+type MessageCards struct {
+	Deck deck.Deck
 }

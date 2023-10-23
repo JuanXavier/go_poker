@@ -56,7 +56,6 @@ func NewCard(s Suit, v int) Card {
 type Deck [52]Card
 
 func New() Deck {
-
 	var (
 		nSuits = 4
 		nCards = 13
