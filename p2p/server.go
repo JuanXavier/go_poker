@@ -154,7 +154,6 @@ func (s *Server) loop() {
 		/* ------------------ BROADCAST CHANNEL ----------------- */
 		case msg := <-s.broadcast:
 			logrus.Info("broadcast to all peers")
-
 			if err := s.Broadcast(msg); err != nil {
 				logrus.Errorf("broadcast error", err)
 			}
@@ -164,7 +163,6 @@ func (s *Server) loop() {
 			logrus.WithFields(logrus.Fields{
 				"addr": peer.conn.RemoteAddr(),
 			}).Info("Player disconnected")
-
 			delete(s.peers, peer.conn.RemoteAddr().String())
 
 		/* ---------------------- ADD PEER ---------------------- */
@@ -177,9 +175,12 @@ func (s *Server) loop() {
 
 			/* ------------------ MESSAGE CHANNEL ----------------- */
 		case msg := <-s.msgCh:
-			if err := s.handleMessage(msg); err != nil {
-				panic(err)
-			}
+
+			go func() {
+				if err := s.handleMessage(msg); err != nil {
+					panic(err)
+				}
+			}()
 		}
 	}
 }
@@ -228,16 +229,20 @@ func (s *Server) handleMessage(msg *Message) error {
 	switch v := msg.Payload.(type) {
 	case MessagePeerList:
 		return s.handlePeerList(v)
-
 	case MessageEncDeck:
-		logrus.WithFields(logrus.Fields{
-			"we":   s.ListenAddr,
-			"from": msg.From,
-		}).Info("Received encrypted deck")
-		s.gameState.SetStatus(GameStatusReceivingCards)
-		s.gameState.ShuffleAndEncrypt(msg.From, v.Deck)
+		return s.handleEncryptedDeck(msg.From, v)
 	}
 	return nil
+}
+
+/* ------------------------- [-] ------------------------ */
+
+func (s *Server) handleEncryptedDeck(from string, msg MessageEncDeck) error {
+	logrus.WithFields(logrus.Fields{
+		"we":   s.ListenAddr,
+		"from": from,
+	}).Info("Received encrypted deck")
+	return s.gameState.ShuffleAndEncrypt(from, msg.Deck)
 }
 
 /* -------------------------- - ------------------------- */

@@ -8,7 +8,8 @@ import (
 )
 
 type Player struct {
-	Status GameStatus
+	Status     GameStatus
+	ListenAddr string
 }
 
 type GameState struct {
@@ -19,6 +20,7 @@ type GameState struct {
 	playersWaitingForCards int32
 	players                map[string]*Player
 	playersLock            sync.RWMutex
+	playersList            map[string]*Player
 	decksReceived          map[string]bool
 	decksReceivedLock      sync.RWMutex
 }
@@ -91,12 +93,13 @@ func (g *GameState) LenPlayersConnectedWithLock() int {
 func (g *GameState) AddPlayer(addr string, status GameStatus) {
 	g.playersLock.Lock()
 	defer g.playersLock.Unlock()
-
 	if status == GameStatusWaitingForCards {
 		g.AddPlayerWaitingForCards()
 	}
 
-	g.players[addr] = new(Player)
+	player := &Player{ListenAddr: addr}
+	g.players[addr] = player
+	g.playersList = append(g.playersList, player)
 
 	// set the player status when adding the player
 	g.SetPlayerStatus(addr, status)
@@ -156,43 +159,39 @@ func (g *GameState) SetDecksReceived(from string) {
 }
 
 func (g *GameState) ShuffleAndEncrypt(from string, deck [][]byte) error {
-	// encryption and shuffle
-	g.SetDecksReceived(from)
-	// broadcast it back
-
-	players := g.GetPlayersWithStatus(GameStatusReceivingCards)
-
-	for _, addr := range players {
-		if _, ok := g.decksReceived[addr]; !ok {
-			return nil
-		}
-	}
-
-	g.decksReceivedLock.RUnlock()
-
-	// in this case we receiived all shuffled cards from players
-
-	g.SetStatus(GameStatusPreFlop)
-	g.SendToPlayerWithStatus(MessageEncDeck{Deck: [][]byte{}}, GameStatusReceivingCards)
+	//TODO
+	dealToPlayer := g.playersList[1]
 	return nil
 }
 
 // only used for the "real" dealer
 func (g *GameState) InitiateShuffleAndDeal() {
+	dealToPlayer := g.playersList["0"]
+	g.SendToPlayer(dealToPlayer.ListenAddr, MessageEncDeck{Deck: [][]byte{}})
 	g.SetStatus(GameStatusReceivingCards)
-	// g.broadcast <- MessageEncDeck{Deck: [][]byte{}}
-	g.SendToPlayerWithStatus(MessageEncDeck{Deck: [][]byte{}}, GameStatusWaitingForCards)
 }
 
-func (g *GameState) SendToPlayerWithStatus(payload any, s GameStatus) {
-	players := g.GetPlayersWithStatus(s)
-
+func (g *GameState) SendToPlayer(addr string, payload any) error {
 	g.broadcast <- BroadcastTo{
-		To:      players,
+		To:      []string{addr},
 		Payload: payload,
 	}
 	logrus.WithFields(logrus.Fields{
 		"payload": payload,
-		"players": players,
+		"player":  addr,
 	}).Info("Sending payload to players")
+	return nil
+}
+
+func (g *GameState) SendToPlayerWithStatus(payload any, s GameStatus) {
+	// players := g.GetPlayersWithStatus(s)
+
+	// g.broadcast <- BroadcastTo{
+	// 	To:      players,
+	// 	Payload: payload,
+	// }
+	// logrus.WithFields(logrus.Fields{
+	// 	"payload": payload,
+	// 	"players": players,
+	// }).Info("Sending payload to players")
 }
