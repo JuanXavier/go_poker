@@ -104,7 +104,7 @@ func (s *Server) Connect(addr string) error {
 		return nil
 	}
 
-	conn, err := net.DialTimeout("tcp", addr, 1*time.Second)
+	conn, err := net.DialTimeout("tcp", addr, 5*time.Second)
 
 	if err != nil {
 		return err
@@ -128,20 +128,22 @@ func (s *Server) Broadcast(broadcastMessage BroadcastTo) error {
 		return err
 	}
 
+	fmt.Printf("any")
+
 	for _, addr := range broadcastMessage.To {
 		peer, ok := s.peers[addr]
-
 		if ok {
-			if err := peer.Send(buf.Bytes()); err != nil {
-				logrus.Errorf("Broadcast to peer error: %s", err)
-			}
-			logrus.WithFields(logrus.Fields{
-				"we":   s.ListenAddr,
-				"peer": peer.listenAddr,
-			}).Info("Broadcast")
+			go func(peer *Peer) {
+				if err := peer.Send(buf.Bytes()); err != nil {
+					logrus.Errorf("Broadcast to peer error: %s", err)
+				}
+				logrus.WithFields(logrus.Fields{
+					"we":   s.ListenAddr,
+					"peer": peer.listenAddr,
+				}).Info("Broadcast")
+			}(peer)
 		}
 	}
-
 	return nil
 }
 
@@ -232,29 +234,18 @@ func (s *Server) handleMessage(msg *Message) error {
 			"we":   s.ListenAddr,
 			"from": msg.From,
 		}).Info("Received encrypted deck")
-
-		s.gameState.ShuffleAndEncrypt(msg.From, v.Deck)
-
 		s.gameState.SetStatus(GameStatusReceivingCards)
+		s.gameState.ShuffleAndEncrypt(msg.From, v.Deck)
 	}
-	return nil
-}
-
-/* -------------------------- - ------------------------- */
-func (g *GameState) ShuffleAndEncrypt(from string, deck [][]byte) error {
-	g.SetStatus(GameStatusReceivingCards)
-
-	// encryption and shuffle
-	// broadcast it back
 	return nil
 }
 
 /* -------------------------- - ------------------------- */
 
 func (s *Server) AddPeer(p *Peer) {
-	s.peerLock.Lock() // writing
+	s.peerLock.Lock()
 	defer s.peerLock.Unlock()
-	s.peers[p.conn.RemoteAddr().String()] = p
+	s.peers[p.listenAddr] = p
 }
 
 /* -------------------------- - ------------------------- */
@@ -275,7 +266,6 @@ func (s *Server) Peers() []string {
 
 func (s *Server) isInPeerList(addr string) bool {
 	peers := s.Peers()
-
 	for i := 0; i < len(peers); i++ {
 		if peers[i] == addr {
 			return true

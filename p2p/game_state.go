@@ -7,64 +7,25 @@ import (
 	"time"
 )
 
-type GameStatus int32
-
-const (
-	GameStatusWaitingForCards GameStatus = iota
-	GameStatusReceivingCards
-	GameStatusDealing
-	GameStatusPreFlop
-	GameStatusFlop
-	GameStatusTurn
-	GameStatusRiver
-)
-
 type Player struct {
 	Status GameStatus
 }
 
 type GameState struct {
+	listenAddr             string
+	broadcast              chan BroadcastTo
 	isDealer               bool       // should be atomic accessible
 	gameStatus             GameStatus // should be atomic accessible
-	broadcast              chan BroadcastTo
 	playersWaitingForCards int32
-	playersLock            sync.RWMutex
 	players                map[string]*Player
-	listenAddr             string
+	playersLock            sync.RWMutex
+	decksReceived          map[string]bool
+	decksReceivedLock      sync.RWMutex
 }
 
 /* ---------------------- FUNCTIONS --------------------- */
-func (g GameStatus) String() string {
-	switch g {
-	case GameStatusWaitingForCards:
-		return "WAITING FOR CARDS"
-	case GameStatusReceivingCards:
-		return "RECEIVING CARDS"
-	case GameStatusDealing:
-		return "DEALING"
-	case GameStatusPreFlop:
-		return "Pre-flop"
-	case GameStatusFlop:
-		return "Flop"
-	case GameStatusTurn:
-		return "Turn"
-	case GameStatusRiver:
-		return "River"
-	default:
-		return "Unknown"
-	}
-}
 
 /* -------------------------- - ------------------------- */
-
-func (g *GameState) SendToPlayerWithStatus(payload any, s GameStatus) {
-	players := g.GetPlayersWithStatus(s)
-
-	g.broadcast <- BroadcastTo{
-		To:      players,
-		Payload: payload,
-	}
-}
 
 /* -------------------------- - ------------------------- */
 
@@ -150,11 +111,12 @@ func (g *GameState) AddPlayer(addr string, status GameStatus) {
 
 func NewGameState(addr string, broadcast chan BroadcastTo) *GameState {
 	g := &GameState{
-		listenAddr: addr,
-		broadcast:  broadcast,
-		isDealer:   false,
-		gameStatus: GameStatusWaitingForCards,
-		players:    make(map[string]*Player),
+		listenAddr:    addr,
+		broadcast:     broadcast,
+		isDealer:      false,
+		gameStatus:    GameStatusWaitingForCards,
+		players:       make(map[string]*Player),
+		decksReceived: make(map[string]bool),
 	}
 	go g.loop()
 	return g
@@ -178,6 +140,7 @@ func (g *GameState) loop() {
 				"we":                g.listenAddr,
 				"connected players": g.LenPlayersConnectedWithLock(),
 				"status":            g.gameStatus,
+				"decksReceived":     g.decksReceived,
 			}).Info("New player joined")
 
 		default:
@@ -186,9 +149,50 @@ func (g *GameState) loop() {
 	}
 }
 
+func (g *GameState) SetDecksReceived(from string) {
+	g.decksReceivedLock.Lock()
+	g.decksReceived[from] = true
+	g.decksReceivedLock.Unlock()
+}
+
+func (g *GameState) ShuffleAndEncrypt(from string, deck [][]byte) error {
+	// encryption and shuffle
+	g.SetDecksReceived(from)
+	// broadcast it back
+
+	players := g.GetPlayersWithStatus(GameStatusReceivingCards)
+
+	for _, addr := range players {
+		if _, ok := g.decksReceived[addr]; !ok {
+			return nil
+		}
+	}
+
+	g.decksReceivedLock.RUnlock()
+
+	// in this case we receiived all shuffled cards from players
+
+	g.SetStatus(GameStatusPreFlop)
+	g.SendToPlayerWithStatus(MessageEncDeck{Deck: [][]byte{}}, GameStatusReceivingCards)
+	return nil
+}
+
 // only used for the "real" dealer
 func (g *GameState) InitiateShuffleAndDeal() {
 	g.SetStatus(GameStatusReceivingCards)
 	// g.broadcast <- MessageEncDeck{Deck: [][]byte{}}
 	g.SendToPlayerWithStatus(MessageEncDeck{Deck: [][]byte{}}, GameStatusWaitingForCards)
+}
+
+func (g *GameState) SendToPlayerWithStatus(payload any, s GameStatus) {
+	players := g.GetPlayersWithStatus(s)
+
+	g.broadcast <- BroadcastTo{
+		To:      players,
+		Payload: payload,
+	}
+	logrus.WithFields(logrus.Fields{
+		"payload": payload,
+		"players": players,
+	}).Info("Sending payload to players")
 }
